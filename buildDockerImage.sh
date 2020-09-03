@@ -73,11 +73,6 @@ if [ $arch = "amd64" ]; then
     DOCKERFILE="dockerfile_arm"
 fi
 
-if [ "$#" -eq 0 ]; then
-  usage;
-  exit 1;
-fi
-
 while getopts "hesxiv:o:" optname; do
   case "$optname" in
     "h")
@@ -114,7 +109,7 @@ if [ "$VERSION" == "12.1.0.2" ] || [ "$VERSION" == "11.2.0.2" ] || [ "$VERSION" 
 fi;
 
 # openGauss Database Image Name
-IMAGE_NAME="opengauss:$VERSION"
+IMAGE_NAME="summertao/opengauss:$VERSION"
 
 # Go into version folder
 cd "$VERSION" || {

@@ -173,12 +173,14 @@ docker_process_sql() {
                 query_runner+=( --dbname "$GS_DB" )
         fi
 
+        echo "Execute SQL: ${query_runner[@]} $@"
         "${query_runner[@]}" "$@"
 }
 
 # create initial database
 # uses environment variables for input: GS_DB
 docker_setup_db() {
+        echo "GS_DB = $GS_DB"
         if [ "$GS_DB" != 'postgres' ]; then
                 GS_DB= docker_process_sql --dbname postgres --set db="$GS_DB" --set passwd="$GS_PASSWORD" --set passwd="$GS_PASSWORD" <<-'EOSQL'
                         CREATE DATABASE :"db" ;
@@ -196,6 +198,16 @@ docker_setup_user() {
 EOSQL
         else           
                 echo " default user is gaussdb"
+        fi
+}
+
+docker_setup_rep_user() {
+        if [ -n "$SERVER_MODE" ] && [ "$SERVER_MODE" = "primary" ]; then
+                GS_DB= docker_process_sql --dbname postgres --set passwd="RepUser@2020" --set user="repuser" <<-'EOSQL'
+                        create user :"user" SYSADMIN REPLICATION password :"passwd" ;
+EOSQL
+        else           
+                echo " default no repuser created"
         fi
 }
 
@@ -227,6 +239,11 @@ opengauss_setup_hba_conf() {
                         echo '# warning trust is enabled for all connections'
                 fi
                 echo "host all all 0.0.0.0/0 $GS_HOST_AUTH_METHOD"
+                if [ -n "$SERVER_MODE" ] && [ "$SERVER_MODE" = "primary" ]; then
+                    echo "host replication repuser $MASTER_IP/24 trust"
+                    echo "host replication repuser $SLAVE_1_IP/24 trust"
+                    echo "host replication repuser $SLAVE_2_IP/24 trust"
+                fi
         } >> "$PGDATA/pg_hba.conf"
 }
 
@@ -236,13 +253,27 @@ opengauss_setup_postgresql_conf() {
                 echo
                 if [ -n "$GS_PORT" ]; then
                     echo "password_encryption_type = 0"
-                    echo "listen_addresses = '*'"
                     echo "port = $GS_PORT"
                 else
                     echo '# use default port 5432'
                     echo "password_encryption_type = 0"
+                fi
+                
+                if [ -n "$SERVER_MODE" ]; then
+                    echo "listen_addresses = '0.0.0.0'"
+                    echo "remote_read_mode = non_authentication"
+                    echo "pgxc_node_name = $NODE_NAME"
+                    echo "application_name = $NODE_NAME"
+                    if [ "$SERVER_MODE" = "primary" ]; then
+                        echo "max_connections = 800"
+                    else
+                        echo "max_connections = 900"
+                    fi
+                    echo -e "$REPL_CONN_INFO"
+                else
                     echo "listen_addresses = '*'"
                 fi
+
         } >> "$PGDATA/postgresql.conf"
 }
 
@@ -259,7 +290,7 @@ docker_temp_server_start() {
 
         # internal start of server in order to allow setup using gsql client
         # does not listen on external TCP/IP and waits until start finishes
-        set -- "$@" -c listen_addresses='' -p "${PGPORT:-5432}"
+        set -- "$@" -c listen_addresses='' -p "${GS_PORT:-5432}"
 
         PGUSER="${PGUSER:-$GS_USER}" \
         gs_ctl -D "$PGDATA" \
@@ -277,6 +308,7 @@ docker_temp_server_stop() {
 # return true if there is one
 _opengauss_want_help() {
         local arg
+        count=1
         for arg; do
                 case "$arg" in
                         # postgres --help | grep 'then exit'
@@ -286,6 +318,12 @@ _opengauss_want_help() {
                                 return 0
                                 ;;
                 esac
+                if [ "$arg" == "-M" ]; then
+                        SERVER_MODE=${@:$count+1:1}
+                        echo "openGauss DB SERVER_MODE = $SERVER_MODE"
+                        shift
+                fi
+                count=$[$count + 1]
         done
         return 1
 }
@@ -322,9 +360,12 @@ _main() {
                         export PGPASSWORD="${PGPASSWORD:-$GS_PASSWORD}"
                         docker_temp_server_start "$@"
 
-                        docker_setup_db
-                        docker_setup_user
-                        docker_process_init_files /docker-entrypoint-initdb.d/*
+                        if [ -z "$SERVER_MODE" ]; then
+                            docker_setup_db
+                            docker_setup_user
+                            docker_setup_rep_user
+                            docker_process_init_files /docker-entrypoint-initdb.d/*
+                        fi
 
                         docker_temp_server_stop
                         unset PGPASSWORD
@@ -338,8 +379,8 @@ _main() {
                         echo
                 fi
         fi
-
         exec "$@"
+
 }
 
 if ! _is_sourced; then

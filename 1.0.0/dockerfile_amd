@@ -40,6 +40,6 @@ COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh;ln -s /usr/local/bin/entrypoint.sh / # backwards compat
 
 ENTRYPOINT ["entrypoint.sh"]
-
+#ENTRYPOINT ["/bin/bash"]
 EXPOSE 5432 
 CMD ["gaussdb"]
