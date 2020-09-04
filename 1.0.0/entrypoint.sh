@@ -258,12 +258,13 @@ opengauss_setup_postgresql_conf() {
                     echo '# use default port 5432'
                     echo "password_encryption_type = 0"
                 fi
-                
+
                 if [ -n "$SERVER_MODE" ]; then
                     echo "listen_addresses = '0.0.0.0'"
+                    echo "most_available_sync = on"
                     echo "remote_read_mode = non_authentication"
-                    echo "pgxc_node_name = $NODE_NAME"
-                    echo "application_name = $NODE_NAME"
+                    echo "pgxc_node_name = '$NODE_NAME'"
+                    echo "application_name = '$NODE_NAME'"
                     if [ "$SERVER_MODE" = "primary" ]; then
                         echo "max_connections = 800"
                     else
@@ -296,6 +297,10 @@ docker_temp_server_start() {
         gs_ctl -D "$PGDATA" \
                 -o "$(printf '%q ' "$@")" \
                 -w start
+}
+
+docker_slave_full_backup() {
+        gs_ctl build -D "$PGDATA"
 }
 
 # stop postgresql server after done setting up user and running scripts
@@ -360,14 +365,19 @@ _main() {
                         export PGPASSWORD="${PGPASSWORD:-$GS_PASSWORD}"
                         docker_temp_server_start "$@"
 
-                        if [ -z "$SERVER_MODE" ]; then
+                        if [ -z "$SERVER_MODE" ] || [ "$SERVER_MODE" = "primary" ]; then
                             docker_setup_db
                             docker_setup_user
                             docker_setup_rep_user
                             docker_process_init_files /docker-entrypoint-initdb.d/*
                         fi
 
+                        if [ -n "$SERVER_MODE" ] && [ "$SERVER_MODE" != "primary" ]; then
+                            docker_slave_full_backup
+                        fi
+
                         docker_temp_server_stop
+
                         unset PGPASSWORD
 
                         echo

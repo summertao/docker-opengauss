@@ -40,7 +40,9 @@ summertao/opengauss:1.0.0 -M primary \
 }
 echo "OpenGauss Database Master Docker Container created."
 
-docker run  --entrypoint "/bin/bash" --network opengaussnetwork --ip $SLAVE_1_IP --privileged=true \
+sleep 20s
+
+docker run --network opengaussnetwork --ip $SLAVE_1_IP --privileged=true \
 --name opengauss_slave1 -h opengauss_slave1 -p $SLAVE_1_HOST_PORT:$SLAVE_1_HOST_PORT -d \
 -e GS_PORT=$SLAVE_1_HOST_PORT \
 -e MASTER_IP=$MASTER_IP \
@@ -49,7 +51,7 @@ docker run  --entrypoint "/bin/bash" --network opengaussnetwork --ip $SLAVE_1_IP
 -e GS_PASSWORD=$GS_PASSWORD \
 -e NODE_NAME=opengauss_slave1 \
 -e REPL_CONN_INFO="replconninfo1 = 'localhost=$SLAVE_1_IP localport=$SLAVE_1_LOCAL_PORT localservice=$SLAVE_1_HOST_PORT remotehost=$MASTER_IP remoteport=$MASTER_LOCAL_PORT remoteservice=$MASTER_HOST_PORT'\n" \
-summertao/opengauss:1.0.0 -c 'trap : TERM INT; sleep infinity & wait' \
+summertao/opengauss:1.0.0 -M standby \
 || {
   echo ""
   echo "ERROR: OpenGauss Database Slave1 Docker Container was NOT successfully created."
@@ -57,3 +59,19 @@ summertao/opengauss:1.0.0 -c 'trap : TERM INT; sleep infinity & wait' \
 }
 echo "OpenGauss Database Slave1 Docker Container created."
 
+# docker run  --entrypoint "/bin/bash" --network opengaussnetwork --ip $SLAVE_1_IP --privileged=true \
+# --name opengauss_slave1 -h opengauss_slave1 -p $SLAVE_1_HOST_PORT:$SLAVE_1_HOST_PORT -d \
+# -e GS_PORT=$SLAVE_1_HOST_PORT \
+# -e MASTER_IP=$MASTER_IP \
+# -e SLAVE_1_IP=$SLAVE_1_IP \
+# -e SLAVE_2_IP=$SLAVE_2_IP \
+# -e GS_PASSWORD=$GS_PASSWORD \
+# -e NODE_NAME=opengauss_slave1 \
+# -e REPL_CONN_INFO="replconninfo1 = 'localhost=$SLAVE_1_IP localport=$SLAVE_1_LOCAL_PORT localservice=$SLAVE_1_HOST_PORT remotehost=$MASTER_IP remoteport=$MASTER_LOCAL_PORT remoteservice=$MASTER_HOST_PORT'\n" \
+# summertao/opengauss:1.0.0 -c 'trap : TERM INT; sleep infinity & wait' \
+# || {
+#   echo ""
+#   echo "ERROR: OpenGauss Database Slave1 Docker Container was NOT successfully created."
+#   exit 1
+# }
+# echo "OpenGauss Database Slave1 Docker Container created."
