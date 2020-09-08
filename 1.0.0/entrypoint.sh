@@ -239,10 +239,8 @@ opengauss_setup_hba_conf() {
                         echo '# warning trust is enabled for all connections'
                 fi
                 echo "host all all 0.0.0.0/0 $GS_HOST_AUTH_METHOD"
-                if [ -n "$SERVER_MODE" ] && [ "$SERVER_MODE" = "primary" ]; then
-                    echo "host replication repuser $MASTER_IP/24 trust"
-                    echo "host replication repuser $SLAVE_1_IP/24 trust"
-                    echo "host replication repuser $SLAVE_2_IP/24 trust"
+                if [ -n "$SERVER_MODE" ]; then
+                    echo "host replication repuser $OG_SUBNET trust"
                 fi
         } >> "$PGDATA/pg_hba.conf"
 }
@@ -264,17 +262,23 @@ opengauss_setup_postgresql_conf() {
                     echo "most_available_sync = on"
                     echo "remote_read_mode = non_authentication"
                     echo "pgxc_node_name = '$NODE_NAME'"
-                    echo "application_name = '$NODE_NAME'"
+                    # echo "application_name = '$NODE_NAME'"
                     if [ "$SERVER_MODE" = "primary" ]; then
                         echo "max_connections = 800"
                     else
                         echo "max_connections = 900"
                     fi
                     echo -e "$REPL_CONN_INFO"
+                    if [ -n "$SYNCHRONOUS_STANDBY_NAMES" ]; then
+                        echo "synchronous_standby_names=$SYNCHRONOUS_STANDBY_NAMES"
+                    fi
                 else
                     echo "listen_addresses = '*'"
                 fi
 
+                if [ -n "$OTHER_PG_CONF" ]; then
+                    echo -e "$OTHER_PG_CONF"
+                fi
         } >> "$PGDATA/postgresql.conf"
 }
 
@@ -300,7 +304,7 @@ docker_temp_server_start() {
 }
 
 docker_slave_full_backup() {
-        gs_ctl build -D "$PGDATA"
+        gs_ctl build -D "$PGDATA" -b full
 }
 
 # stop postgresql server after done setting up user and running scripts
